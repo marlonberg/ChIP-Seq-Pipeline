@@ -1,0 +1,49 @@
+import re
+from subprocess import call
+
+READS = ["p1_DM_H3K4_boeckel_R1"]
+INPUTREADS=["p1_DM_input_boeckel_R1"]
+
+rule all:
+	input: expand("{read}.fastq.trimmed", read=READS), expand("{inputread}.fastq.trimmed", inputread=INPUTREADS),expand("{read}.fastq.trimmed", read=READS), expand("{inputread}.fastq.trimmed", inputread=INPUTREADS),expand("{read}_mapped/Aligned.out.sam",read=READS), expand("{inputread}_mapped/Aligned.out.sam",inputread=INPUTREADS),expand("{read}Tags", read=READS),expand("{inputread}Tags", inputread=INPUTREADS),expand("{inputread}/regions.txt", inputread=INPUTREADS)
+
+rule fastqc:
+    input: expand("{read}.fastq", read=READS),expand("{inputread}.fastq", inputread=INPUTREADS)
+    output: expand("FastQCfiles/{read}_fastqc/fastqc_data.txt", read=READS),expand("FastQCfiles/{inputread}_fastqc/fastqc_data.txt", inputread=INPUTREADS)
+    shell: "fastqc -o FastQCfiles {input} --extract"
+
+rule trim:
+	input: expand("{read}.fastq",read=READS),expand("FastQCfiles/{read}_fastqc/fastqc_data.txt", read=READS),expand("{inputread}.fastq",inputread=INPUTREADS),expand("FastQCfiles/{inputread}_fastqc/fastqc_data.txt", inputread=INPUTREADS)
+	output: expand("{read}.fastq.trimmed", read=READS), expand("{inputread}.fastq.trimmed", inputread=INPUTREADS)
+	run:
+		with open(input[1]) as filetoread:
+			lines=filetoread.readlines()
+			for i in range(len(lines)):
+				if re.search('>>Sequence Length Distribution',lines[i]):
+					s=re.split('\s+', lines[i])
+					if s[3]=="fail":
+						shell("homerTools trim {input[0]}")
+
+rule readMapping:
+    input: expand("{read}.fastq.trimmed", read=READS),expand("{inputread}.fastq.trimmed", inputread=INPUTREADS), "/media/ATLAS_Genomes_Annotations/human/GRCH38/primary_assembly/star_index"
+    output: expand("{read}_mapped/Aligned.out.sam",read=READS), expand("{inputread}_mapped/Aligned.out.sam",inputread=INPUTREADS)
+    shell: "STAR --readFilesIn {input[0]} --genomeDir {input[1]} --outFileNamePrefix mapped"
+
+rule makeTagDir:
+    input: expand("{read}.fastq.trimmed", read=READS),expand("{inputread}.fastq.trimmed", inputread=INPUTREADS)
+    output: expand("{read}Tags", read=READS),expand("{inputread}Tags", inputread=INPUTREADS)
+    shell: "makeTagDirectory {output} {input}"
+
+rule peakCalling:
+    input: expand("{read}Tags", read=READS),expand("{inputread}Tags", inputread=INPUTREADS)
+    output: expand("{inputread}/regions.txt", inputread=INPUTREADS)
+    shell: "findPeaks {input[0]} -stile histone -o auto {input[1]}"
+
+    
+
+
+
+
+
+
+
