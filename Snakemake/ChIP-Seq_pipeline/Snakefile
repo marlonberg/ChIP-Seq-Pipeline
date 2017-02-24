@@ -11,10 +11,9 @@ rule fastqc:
 
 rule trim:
 	input: a=expand("{reads}.fastq", reads=READS+INPUTREADS), b=expand("FastQCfiles/{reads}_fastqc/fastqc_data.txt",reads=READS+INPUTREADS)
-	output: "{reads}.fastq.trimmed"
+	output: expand("{reads}.fastq.trimmed", reads=READS+INPUTREADS)
 	run:
 		for i in input.b:
-			print(i)
 			with open(i) as filetoread:
 				lines=filetoread.readlines()
 				for j in range(len(lines)):
