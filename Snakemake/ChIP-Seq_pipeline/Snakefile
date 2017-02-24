@@ -1,0 +1,44 @@
+READS = ["p1_DM_H3K4_boeckel_R1"]
+INPUTREADS=["p1_DM_input_boeckel_R1"]
+
+rule all:
+	input: expand("{read}Tags/regions.txt", read=READS)
+
+rule fastqc:
+    input: "{reads}.fastq"
+    output: "FastQCfiles/{reads}_fastqc/fastqc_data.txt"
+    shell: "fastqc -o FastQCfiles {input} --extract"
+
+rule trim:
+	input: a=expand("{reads}.fastq", reads=READS+INPUTREADS), b=expand("FastQCfiles/{reads}_fastqc/fastqc_data.txt",reads=READS+INPUTREADS)
+	output: "{reads}.fastq.trimmed"
+	run:
+		for i in input.b:
+			print(i)
+			with open(i) as filetoread:
+				lines=filetoread.readlines()
+				for j in range(len(lines)):
+					if re.search('>>Sequence Length Distribution',lines[j]):
+						s=re.split('\s+', lines[j])
+						if s[3]=="fail":
+							k=input.a[input.b.index(i)]
+							shell("homerTools trim " + str(k))
+
+rule readMapping:
+    input:  "/media/ATLAS_Genomes_Annotations/human/GRCH38/primary_assembly/star_index","{reads}.fastq.trimmed"
+    output: "{reads}_mapped/Aligned.out.sam"
+    shell: "STAR --readFilesIn {input[1]} --genomeDir {input[0]} --outFileNamePrefix {wildcards.reads}_mapped/"
+
+rule makeTagDir:
+    input: expand("{reads}_mapped/Aligned.out.sam", reads=READS+INPUTREADS)
+    output: expand("{reads}Tags", reads=READS+INPUTREADS)
+	run:
+		for i in input:
+			j= output[input.index(i)]
+			shell("makeTagDirectory " + str(j) + " " + str(i))
+
+rule peakCalling:
+    input: expand("{read}Tags", read=READS),expand("{inputread}Tags", inputread=INPUTREADS)
+    output: "{read}Tags/regions.txt"
+    shell: "findPeaks {input[0]} -style histone -o auto -i {input[1]}"
+
