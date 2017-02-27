@@ -2,16 +2,18 @@ READS = ["p1_DM_H3K4_boeckel_R1"]
 INPUTREADS=["p1_DM_input_boeckel_R1"]
 
 rule all:
-	input: expand("{read}Tags/regions.txt", read=READS)
+	input: expand("{read}_Annotation.txt", read=READS)
 
 rule fastqc:
-    input: "{reads}.fastq"
-    output: "FastQCfiles/{reads}_fastqc/fastqc_data.txt"
-    shell: "fastqc -o FastQCfiles {input} --extract"
+	input: "{reads}.fastq"
+	output: "FastQCfiles/{reads}_fastqc/fastqc_data.txt"
+	shell: "fastqc -o FastQCfiles {input} --extract"
 
-rule trim:
-	input: a=expand("{reads}.fastq", reads=READS+INPUTREADS), b=expand("FastQCfiles/{reads}_fastqc/fastqc_data.txt",reads=READS+INPUTREADS)
-	output: expand("{reads}.fastq.trimmed", reads=READS+INPUTREADS)
+rule readMapping:
+	input: a=expand("{reads}.fastq", reads=READS+INPUTREADS),
+		   b=expand("FastQCfiles/{reads}_fastqc/fastqc_data.txt",reads=READS+INPUTREADS), 
+		   c="/media/ATLAS_Genomes_Annotations/human/GRCH38/primary_assembly/star_index"
+	output: expand("{reads}_mapped/Aligned.out.sam", reads=READS+INPUTREADS)
 	run:
 		for i in input.b:
 			with open(i) as filetoread:
@@ -19,25 +21,29 @@ rule trim:
 				for j in range(len(lines)):
 					if re.search('>>Sequence Length Distribution',lines[j]):
 						s=re.split('\s+', lines[j])
+						k=input.a[input.b.index(i)]
 						if s[3]=="fail":
-							k=input.a[input.b.index(i)]
-							shell("homerTools trim " + str(k))
-
-rule readMapping:
-    input:  "/media/ATLAS_Genomes_Annotations/human/GRCH38/primary_assembly/star_index","{reads}.fastq.trimmed"
-    output: "{reads}_mapped/Aligned.out.sam"
-    shell: "STAR --readFilesIn {input[1]} --genomeDir {input[0]} --outFileNamePrefix {wildcards.reads}_mapped/"
+							shell("homerTools trim " + k)
+							shell("STAR --readFilesIn " + k + ".trimmed --genomeDir {input.c} --outFileNamePrefix " + k.replace(".fastq","_mapped/"))
+						else:
+							shell("STAR --readFilesIn " + k + " --genomeDir {input.c} --outFileNamePrefix " + k.replace(".fastq","_mapped/"))
 
 rule makeTagDir:
-    input: expand("{reads}_mapped/Aligned.out.sam", reads=READS+INPUTREADS)
-    output: expand("{reads}Tags", reads=READS+INPUTREADS)
+	input: expand("{reads}_mapped/Aligned.out.sam", reads=READS+INPUTREADS)
+	output: expand("{reads}Tags", reads=READS+INPUTREADS)
 	run:
 		for i in input:
 			j= output[input.index(i)]
 			shell("makeTagDirectory " + str(j) + " " + str(i))
 
 rule peakCalling:
-    input: expand("{read}Tags", read=READS),expand("{inputread}Tags", inputread=INPUTREADS)
-    output: "{read}Tags/regions.txt"
-    shell: "findPeaks {input[0]} -style histone -o auto -i {input[1]}"
+	input: expand("{read}Tags", read=READS),expand("{inputread}Tags", inputread=INPUTREADS)
+	output: "{read}Tags/regions.txt"
+	shell: "findPeaks {input[0]} -style histone -o auto -i {input[1]}"
+
+rule annotatePeaks:
+	input: "{read}Tags/regions.txt"
+	output: "{read}_Annotation.txt"
+	shell: "annotatePeaks.pl {input} /media/ATLAS_Genomes_Annotations/human/GRCH38/primary_assembly/star_index > {output}"
+
 
