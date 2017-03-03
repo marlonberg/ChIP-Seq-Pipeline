@@ -1,0 +1,78 @@
+READS=[]
+CONTROLREADS=[]
+genome="/media/ATLAS_Genomes_Annotations/human/GRCH38/primary_assembly/star_index"
+
+
+#read filenames from targetfile and write them in lists
+with open("targets.csv") as targets:
+	lines=targets.readlines()
+	lines[0]=re.split(',', lines[0])
+	for i in range(1,len(lines)):
+		lines[i]=re.split(',', lines[i])
+		READS.append(lines[i][lines[0].index("fastqRead1")][:-6])
+		CONTROLREADS.append(lines[i][lines[0].index("fastqControl1")][:-6])
+
+
+#define targets
+rule all:
+	input: expand("nonEmpty/trimmed/star/tagDir/Peaks/{read}_Peaks.bed", read=READS)
+
+#delete empty sequences
+rule nonEmpty:
+	input: expand("{reads}.fastq", reads=READS+CONTROLREADS)
+	output: expand("nonEmpty/{reads}.nonEmpty.fastq", reads=READS+CONTROLREADS)
+	run:
+		for i in input:
+			j= output[input.index(i)]	
+			shell("""awk 'BEGIN {{RS = "@NS" ; FS = "\\n" ; ORS = ""}} {{if ($2) print "@NS"$0}}' """ + i + " > " + j)
+		
+#qualitycontrol with FastQC
+rule fastqc:
+	input: expand("nonEmpty/{reads}.nonEmpty.fastq", reads=READS+CONTROLREADS)
+	output: expand("nonEmpty/FastQCfiles/{reads}.nonEmpty_fastqc/fastqc_data.txt", reads=READS+CONTROLREADS)
+	shell: "fastqc -o nonEmpty/FastQCfiles {input} --extract"
+
+#trim reads with homerTools if necessary, map with star
+rule readMapping:
+	input: a=expand("nonEmpty/{reads}.nonEmpty.fastq", reads=READS+CONTROLREADS),
+		   b=expand("nonEmpty/FastQCfiles/{reads}.nonEmpty_fastqc/fastqc_data.txt",reads=READS+CONTROLREADS), 
+		   c=genome
+	output: expand("nonEmpty/trimmed/star/{reads}/Aligned.out.sam", reads=READS+CONTROLREADS)
+	run:
+		for i in input.b:
+			with open(i) as filetoread:
+				lines=filetoread.readlines()
+				for j in range(len(lines)):
+					if re.search('>>Sequence Length Distribution',lines[j]):
+						s=re.split('\s+', lines[j])
+						k=input.a[input.b.index(i)]
+						if s[3]=="fail":
+							shell("homerTools trim " + k)
+							shell("mv " + k + ".trimmed trimmed")
+							shell("mv " + k + ".lengths trimmed")
+							shell("STAR --readFilesIn trimmed/" + k + ".trimmed --genomeDir {input.c} --genomeLoad LoadAndKeep --outFileNamePrefix nonEmpty/trimmed/star/" + k[8:-15] + "/")
+						else:
+							shell("STAR --readFilesIn " + k + " --genomeDir {input.c} --genomeLoad LoadAndKeep --outFileNamePrefix nonEmpty/trimmed/star/" + k[8:-15] + "/")
+
+#create Tag directories with Homer
+rule makeTagDir:
+	input: expand("nonEmpty/trimmed/star/{reads}/Aligned.out.sam", reads=READS+CONTROLREADS)
+	output: expand("nonEmpty/trimmed/star/tagDir/{reads}", reads=READS+CONTROLREADS)
+	run:
+		for i in input:
+			j= output[input.index(i)]
+			shell("makeTagDirectory " + str(j) + " " + str(i))
+
+#call Peaks with Homer
+rule peakCalling:
+	input: expand("nonEmpty/trimmed/star/tagDir/{read}", read=READS),expand("nonEmpty/trimmed/star/tagDir/{controlread}", controlread=CONTROLREADS)
+	output: "nonEmpty/trimmed/star/tagDir/Peaks/{read}_Peaks.txt"
+	shell: "findPeaks {input[0]} -style factor -o {output} -i {input[1]}"
+
+#convert peakfiles to BED format
+rule convertToBed:
+	input: expand("nonEmpty/trimmed/star/tagDir/Peaks/{read}_Peaks.txt", read=READS)
+	output: expand("nonEmpty/trimmed/star/tagDir/Peaks/{read}_Peaks.bed", read=READS)
+	shell: "pos2bed.pl {input} > {output}"
+
+
