@@ -50,9 +50,9 @@ rule readMapping:
 							shell("homerTools trim " + k)
 							shell("mv " + k + ".trimmed trimmed")
 							shell("mv " + k + ".lengths trimmed")
-							shell("STAR --readFilesIn trimmed/" + k + ".trimmed --genomeDir {input.c} --genomeLoad LoadAndKeep --outFileNamePrefix nonEmpty/trimmed/star/" + k[8:-15] + "/")
+							shell("STAR --readFilesIn trimmed/" + k + ".trimmed --genomeDir {input.c}  --outFileNamePrefix nonEmpty/trimmed/star/" + k[8:-15] + "/")
 						else:
-							shell("STAR --readFilesIn " + k + " --genomeDir {input.c} --genomeLoad LoadAndKeep --outFileNamePrefix nonEmpty/trimmed/star/" + k[8:-15] + "/")
+							shell("STAR --readFilesIn " + k + " --genomeDir {input.c} --outFileNamePrefix nonEmpty/trimmed/star/" + k[8:-15] + "/")
 
 #create Tag directories with Homer
 rule makeTagDir:
@@ -65,14 +65,22 @@ rule makeTagDir:
 
 #call Peaks with Homer
 rule peakCalling:
-	input: expand("nonEmpty/trimmed/star/tagDir/{read}", read=READS),expand("nonEmpty/trimmed/star/tagDir/{controlread}", controlread=CONTROLREADS)
-	output: "nonEmpty/trimmed/star/tagDir/Peaks/{read}_Peaks.txt"
-	shell: "findPeaks {input[0]} -style factor -o {output} -i {input[1]}"
+	input: a=expand("nonEmpty/trimmed/star/tagDir/{read}", read=READS),b=expand("nonEmpty/trimmed/star/tagDir/{controlread}", controlread=CONTROLREADS)
+	output: expand("nonEmpty/trimmed/star/tagDir/Peaks/{read}_Peaks.txt", read=READS)
+	run:
+		for i in input.a:
+			j= output[input.a.index(i)]
+			k=input.b[input.a.index(i)]
+			shell("findPeaks " + i + " -style factor -o " + j +" -i " + k)
+
 
 #convert peakfiles to BED format
 rule convertToBed:
 	input: expand("nonEmpty/trimmed/star/tagDir/Peaks/{read}_Peaks.txt", read=READS)
 	output: expand("nonEmpty/trimmed/star/tagDir/Peaks/{read}_Peaks.bed", read=READS)
-	shell: "pos2bed.pl {input} > {output}"
+	run:
+		for i in input:
+			j= output[input.index(i)]
+			shell("pos2bed.pl " +i+" > " +j)
 
 
