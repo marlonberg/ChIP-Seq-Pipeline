@@ -1,5 +1,7 @@
 READS=[]
 CONTROLREADS=[]
+READS2=[]
+CONTROLREADS2=[]
 genome="/media/ATLAS_Genomes_Annotations/human/GRCH38/primary_assembly/star_index"
 
 
@@ -11,6 +13,26 @@ with open("targets.csv") as targets:
 		lines[i]=re.split(',', lines[i])
 		READS.append(lines[i][lines[0].index("fastqRead1")][:-6])
 		CONTROLREADS.append(lines[i][lines[0].index("fastqControl1")][:-6])
+		#second reads for paired-end
+		if lines[i][lines[0].index("fastqRead2")]!="-":
+			READS2.append(lines[i][lines[0].index("fastqRead2")][:-6])
+		else:
+			READS2.append(lines[i][lines[0].index("fastqRead2")])
+		if lines[i][lines[0].index("fastqControl2")]!="-":
+			CONTROLREADS2.append(lines[i][lines[0].index("fastqControl2")][:-6])
+		else:
+			CONTROLREADS2.append(lines[i][lines[0].index("fastqControl2")])
+
+
+reads=READS+CONTROLREADS
+reads2=[]
+for i in READS2:
+	if i != "-":
+		reads2.append(i)
+for i in CONTROLREADS2:
+	if i != "-":
+		reads2.append(i)
+allReads=reads+reads2
 
 
 #define targets
@@ -19,8 +41,8 @@ rule all:
 
 #delete empty sequences
 rule nonEmpty:
-	input: expand("{reads}.fastq", reads=READS+CONTROLREADS)
-	output: expand("nonEmpty/{reads}.nonEmpty.fastq", reads=READS+CONTROLREADS)
+	input: expand("{reads}.fastq", reads=allReads)
+	output: expand("nonEmpty/{reads}.nonEmpty.fastq", reads=allReads)
 	run:
 		for i in input:
 			j= output[input.index(i)]	
@@ -28,36 +50,72 @@ rule nonEmpty:
 		
 #qualitycontrol with FastQC
 rule fastqc:
-	input: expand("nonEmpty/{reads}.nonEmpty.fastq", reads=READS+CONTROLREADS)
-	output: expand("nonEmpty/FastQCfiles/{reads}.nonEmpty_fastqc/fastqc_data.txt", reads=READS+CONTROLREADS)
+	input: expand("nonEmpty/{reads}.nonEmpty.fastq", reads=allReads)
+	output: expand("nonEmpty/FastQCfiles/{reads}.nonEmpty_fastqc/fastqc_data.txt", reads=allReads)
 	shell: "fastqc -o nonEmpty/FastQCfiles {input} --extract"
 
 #trim reads with homerTools if necessary, map with star
 rule readMapping:
-	input: a=expand("nonEmpty/{reads}.nonEmpty.fastq", reads=READS+CONTROLREADS),
-		   b=expand("nonEmpty/FastQCfiles/{reads}.nonEmpty_fastqc/fastqc_data.txt",reads=READS+CONTROLREADS), 
-		   c=genome
-	output: expand("nonEmpty/trimmed/star/{reads}/Aligned.out.sam", reads=READS+CONTROLREADS)
+	input: readList=expand("nonEmpty/{reads}.nonEmpty.fastq", reads=reads),
+		   fastqcData=expand("nonEmpty/FastQCfiles/{reads}.nonEmpty_fastqc/fastqc_data.txt",reads=reads),
+		   genome=genome
+	output: expand("nonEmpty/trimmed/star/{reads}/Aligned.out.sam", reads=reads)
 	run:
-		for i in input.b:
+		for i in input.fastqcData:
+			#open fastqc data
 			with open(i) as filetoread:
 				lines=filetoread.readlines()
 				for j in range(len(lines)):
 					if re.search('>>Sequence Length Distribution',lines[j]):
-						s=re.split('\s+', lines[j])
-						k=input.a[input.b.index(i)]
-						if s[3]=="fail":
-							shell("homerTools trim " + k)
-							shell("mv " + k + ".trimmed trimmed")
-							shell("mv " + k + ".lengths trimmed")
-							shell("STAR --readFilesIn trimmed/" + k + ".trimmed --genomeDir {input.c}  --outFileNamePrefix nonEmpty/trimmed/star/" + k[8:-15] + "/")
+						splitLine=re.split('\s+', lines[j])
+						currRead1=input.readList[input.fastqcData.index(i)]
+						currRead2=(READS2+CONTROLREADS2)[input.fastqcData.index(i)]
+						sliceStart=9
+						sliceEnd=-15
+						sl=slice(sliceStart,sliceEnd)
+						#check if paired-end
+						if currRead2!="-":
+							#open fastqc data of second read
+							with open("nonEmpty/FastQCfiles/"+currRead2+"_fastqc/fastqc_data.txt") as file2:
+								lines2=file2.readlines()
+								for k in range(len(lines2)):
+									if re.search('>>Sequence Length Distribution',lines2[k]):
+										splitLine2=re.split('\s+', lines2[k])
+										#check if first read has to be trimmed
+										if splitLine[3]=="fail":
+											#trim first read and move files to subdirectory trimmed
+											shell("homerTools trim " + currRead1)
+											shell("mv " + currRead1 + ".trimmed trimmed")
+											shell("mv " + currRead1 + ".lengths trimmed")
+											currRead1="trimmed/" + currRead1 + ".trimmed"
+											sliceStart=17
+											sliceEnd=-23
+										#check if second read has to be trimmed
+										if splitLine2[3]=="fail":
+											#trim second read and move files to subdirectory trimmed
+											shell("homerTools trim " + currRead2)
+											shell("mv " + currRead2 + ".trimmed trimmed")
+											shell("mv " + currRead2 + ".lengths trimmed")
+											currRead1="trimmed/" + currRead2 + ".trimmed"
+										#map paired end reads
+										shell("STAR --readFilesIn " + currRead1 + currRead2 +" --genomeDir {input.d} --outFileNamePrefix nonEmpty/trimmed/star/" + currRead1[sl] + "/")
 						else:
-							shell("STAR --readFilesIn " + k + " --genomeDir {input.c} --outFileNamePrefix nonEmpty/trimmed/star/" + k[8:-15] + "/")
+							#check if read has to be trimmed
+							if splitLine[3]=="fail":
+								#trim read and move files to subdirectory trimmed
+								shell("homerTools trim " + currRead1)
+								shell("mv " + currRead1 + ".trimmed trimmed")
+								shell("mv " + currRead1 + ".lengths trimmed")
+								currRead1="trimmed/" + currRead1 + ".trimmed"
+								sliceStart=17
+								sliceEnd=-23
+							#map read
+							shell("STAR --readFilesIn " + currRead1 + " --genomeDir {input.genome} --outFileNamePrefix nonEmpty/trimmed/star/" + currRead1[sl] + "/")
 
 #create Tag directories with Homer
 rule makeTagDir:
-	input: expand("nonEmpty/trimmed/star/{reads}/Aligned.out.sam", reads=READS+CONTROLREADS)
-	output: expand("nonEmpty/trimmed/star/tagDir/{reads}", reads=READS+CONTROLREADS)
+	input: expand("nonEmpty/trimmed/star/{reads}/Aligned.out.sam", reads=reads)
+	output: expand("nonEmpty/trimmed/star/tagDir/{reads}", reads=reads)
 	run:
 		for i in input:
 			j= output[input.index(i)]
