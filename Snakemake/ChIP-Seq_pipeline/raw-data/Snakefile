@@ -1,8 +1,11 @@
+import math
+
 READS=[]
 CONTROLREADS=[]
 READS2=[]
 CONTROLREADS2=[]
-genome="/media/ATLAS_Genomes_Annotations/human/GRCH38/primary_assembly/star_index"
+genome=config["genome"]
+peakType=config["peakType"]
 
 
 #read filenames from targetfile and write them in lists
@@ -21,7 +24,7 @@ with open("targets.csv") as targets:
 		if lines[i][lines[0].index("fastqControl2")]!="-":
 			CONTROLREADS2.append(lines[i][lines[0].index("fastqControl2")][:-6])
 		else:
-			CONTROLREADS2.append(lines[i][lines[0].index("fastqControl2")])
+			CONTROLREADS2.append(lines[i][lines[0].index("fastqControl2")]) #empty strings need to be added to avoid index errors afterwards
 
 
 reads=READS+CONTROLREADS
@@ -33,7 +36,6 @@ for i in CONTROLREADS2:
 	if i != "-":
 		reads2.append(i)
 allReads=reads+reads2
-
 
 #define targets
 rule all:
@@ -52,84 +54,86 @@ rule nonEmpty:
 rule fastqc:
 	input: expand("nonEmpty/{reads}.nonEmpty.fastq", reads=allReads)
 	output: expand("nonEmpty/FastQCfiles/{reads}.nonEmpty_fastqc/fastqc_data.txt", reads=allReads)
-	shell: "fastqc -o nonEmpty/FastQCfiles {input} --extract"
+	log: "log/log.txt"
+	shell: """echo "FastQC Analysis:\n" >> {log}
+		fastqc -o nonEmpty/FastQCfiles {input} --extract 2>> {log}"""
 
-#trim reads with homerTools if necessary, map with star
+#fucntion for calculating standart deviation
+def stdev(line):
+	split = re.split('\s', line)
+	values = [float(split[1]), float(split[2]), float(split[3]), float(split[4])]
+	st = math.sqrt(sum((v - sum(values) / len(values)) ** 2 for v in values) / (len(values) - 1))
+	return st
+
+#trim with fastx_trimmer
+#the trim condition is the standart deviation of the bases for every position
+rule trim:
+	input: reads=expand("nonEmpty/{reads}.nonEmpty.fastq", reads=allReads),
+		   fastqcFile=expand("nonEmpty/FastQCfiles/{read}.nonEmpty_fastqc/fastqc_data.txt", read=reads[0]),
+	output: expand("nonEmpty/trimmed/{reads}.nonEmpty.fastq.trimmed", reads=allReads)
+	log: "log/log.txt"
+	run: 	
+		count=0
+		file=open(str(input.fastqcFile))
+		lines = file.readlines()
+		for j in range(len(lines)):
+			if re.search('>>Per sequence GC content', lines[j]):
+				endOfRead=j-2
+		for j in range(len(lines)):
+			if re.search('>>Per base sequence content', lines[j]):
+				for k in range(j + 2, endOfRead):
+					count+=1
+					if stdev(lines[k]) <= 10:
+						start = count+1
+						while stdev(lines[k]) <= 10:
+							k += 1
+							count+=1
+						end = count-3
+						break
+				break
+		shell("""echo "\n\ntrimming with fastx_trimmer:\n" >> {log}""")
+		for i in input.reads:
+			shell("fastx_trimmer -Q33 -f " + str(start) + " -l " + str(end) + " -i " + i + " -o " + output[input.reads.index(i)] + " -v >> {log}")
+
+
+#map reads with STAR
 rule readMapping:
-	input: readList=expand("nonEmpty/{reads}.nonEmpty.fastq", reads=reads),
-		   fastqcData=expand("nonEmpty/FastQCfiles/{reads}.nonEmpty_fastqc/fastqc_data.txt",reads=reads),
-		   genome=genome
-	output: expand("nonEmpty/trimmed/star/{reads}/Aligned.out.sam", reads=reads)
+	input: readsToMap=expand("nonEmpty/trimmed/{reads}.nonEmpty.fastq.trimmed", reads=reads)
+	output: expand("nonEmpty/trimmed/star/{reads}/Aligned.sortedByCoord.out.bam", reads=reads)
 	run:
-		for i in input.fastqcData:
-			#open fastqc data
-			with open(i) as filetoread:
-				lines=filetoread.readlines()
-				for j in range(len(lines)):
-					if re.search('>>Sequence Length Distribution',lines[j]):
-						splitLine=re.split('\s+', lines[j])
-						currRead1=input.readList[input.fastqcData.index(i)]
-						currRead2=(READS2+CONTROLREADS2)[input.fastqcData.index(i)]
-						sliceStart=9
-						sliceEnd=-15
-						sl=slice(sliceStart,sliceEnd)
-						#check if paired-end
-						if currRead2!="-":
-							#open fastqc data of second read
-							with open("nonEmpty/FastQCfiles/"+currRead2+"_fastqc/fastqc_data.txt") as file2:
-								lines2=file2.readlines()
-								for k in range(len(lines2)):
-									if re.search('>>Sequence Length Distribution',lines2[k]):
-										splitLine2=re.split('\s+', lines2[k])
-										#check if first read has to be trimmed
-										if splitLine[3]=="fail":
-											#trim first read and move files to subdirectory trimmed
-											shell("homerTools trim " + currRead1)
-											shell("mv " + currRead1 + ".trimmed trimmed")
-											shell("mv " + currRead1 + ".lengths trimmed")
-											currRead1="trimmed/" + currRead1 + ".trimmed"
-											sliceStart=17
-											sliceEnd=-23
-										#check if second read has to be trimmed
-										if splitLine2[3]=="fail":
-											#trim second read and move files to subdirectory trimmed
-											shell("homerTools trim " + currRead2)
-											shell("mv " + currRead2 + ".trimmed trimmed")
-											shell("mv " + currRead2 + ".lengths trimmed")
-											currRead1="trimmed/" + currRead2 + ".trimmed"
-										#map paired end reads
-										shell("STAR --readFilesIn " + currRead1 + currRead2 +" --genomeDir {input.d} --outFileNamePrefix nonEmpty/trimmed/star/" + currRead1[sl] + "/")
-						else:
-							#check if read has to be trimmed
-							if splitLine[3]=="fail":
-								#trim read and move files to subdirectory trimmed
-								shell("homerTools trim " + currRead1)
-								shell("mv " + currRead1 + ".trimmed trimmed")
-								shell("mv " + currRead1 + ".lengths trimmed")
-								currRead1="trimmed/" + currRead1 + ".trimmed"
-								sliceStart=17
-								sliceEnd=-23
-							#map read
-							shell("STAR --readFilesIn " + currRead1 + " --genomeDir {input.genome} --outFileNamePrefix nonEmpty/trimmed/star/" + currRead1[sl] + "/")
+		for read in input.readsToMap:
+			read2=(READS2+CONTROLREADS2)[input.readsToMap.index(read)]
+			#check if paired-end
+			if read2 !="-":
+				shell("STAR --readFilesIn " + read + " " + read2 + " --genomeDir {genome} --outFileNamePrefix nonEmpty/trimmed/star/" + reads[input.readsToMap.index(read)] +"/ --outSAMtype BAM SortedByCoordinate")
+			else:
+				shell("STAR --readFilesIn " + read + " --genomeDir {genome} --outFileNamePrefix nonEmpty/trimmed/star/" + reads[input.readsToMap.index(read)]+"/ --outSAMtype BAM SortedByCoordinate")
+
+
+
 
 #create Tag directories with Homer
 rule makeTagDir:
-	input: expand("nonEmpty/trimmed/star/{reads}/Aligned.out.sam", reads=reads)
+	input: expand("nonEmpty/trimmed/star/{reads}/Aligned.sortedByCoord.out.bam", reads=reads)
 	output: expand("nonEmpty/trimmed/star/tagDir/{reads}", reads=reads)
+	log: "log/log.txt"
 	run:
+		shell("""echo "\n\ncreate Tag directories with Homer:\n" >> {log}""")
 		for i in input:
 			j= output[input.index(i)]
-			shell("makeTagDirectory " + str(j) + " " + str(i))
+			shell("makeTagDirectory " + j + " " + i + " 2>> {log}")
 
 #call Peaks with Homer
 rule peakCalling:
 	input: a=expand("nonEmpty/trimmed/star/tagDir/{read}", read=READS),b=expand("nonEmpty/trimmed/star/tagDir/{controlread}", controlread=CONTROLREADS)
 	output: expand("nonEmpty/trimmed/star/tagDir/Peaks/{read}_Peaks.txt", read=READS)
+	log: "log/log.txt"
 	run:
+		shell("""echo "\n\ncall Peaks with Homer:\n" >> {log}""")
 		for i in input.a:
 			j= output[input.a.index(i)]
 			k=input.b[input.a.index(i)]
-			shell("findPeaks " + i + " -style factor -o " + j +" -i " + k)
+			shell("findPeaks " + i + " -style " + peakType + " -o " + j +" -i " + k + " 2>> {log}")
 
 
 #convert peakfiles to BED format
@@ -139,6 +143,6 @@ rule convertToBed:
 	run:
 		for i in input:
 			j= output[input.index(i)]
-			shell("pos2bed.pl " +i+" > " +j)
+			shell("pos2bed.pl " + i +" > " + j)
 
 
