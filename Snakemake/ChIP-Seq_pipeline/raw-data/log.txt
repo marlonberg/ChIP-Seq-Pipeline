@@ -1,0 +1,128 @@
+FastQC Analysis:
+
+Started analysis of p1_DM_H3K9_boeckel_R1.head.nonEmpty.fastq
+Started analysis of p2_DMT_H3K9me3_boeckel_R1.head.nonEmpty.fastq
+FastQC Analysis:
+
+Started analysis of p1_DM_H3K9_boeckel_R1.head.nonEmpty.fastq
+Started analysis of p1_DM_input_boeckel_R1.head.nonEmpty.fastq
+
+
+trimming with fastx_trimmer:
+
+Trimming: base 5 to 72
+Input: 999 reads.
+Output: 999 reads.
+Trimming: base 5 to 72
+Input: 999 reads.
+Output: 999 reads.
+
+
+create Tag directories with Homer:
+
+	Will parse file: nonEmpty/trimmed/star/p1_DM_H3K9_boeckel_R1.head/Aligned.sortedByCoord.out.bam
+
+	Creating directory: nonEmpty/trimmed/star/tagDir/p1_DM_H3K9_boeckel_R1.head and removing existing *.tags.tsv
+
+	Treating nonEmpty/trimmed/star/p1_DM_H3K9_boeckel_R1.head/Aligned.sortedByCoord.out.bam as a bam file
+	Reading alignment file nonEmpty/trimmed/star/p1_DM_H3K9_boeckel_R1.head/Aligned.sortedByCoord.out.bam
+
+	Optimizing tag files...
+	Estimated genome size = 2964171869
+	Estimated average read density = 0.000000 per bp
+	Total Tags = 892.0
+	Total Positions = 887
+	Average tag length = 67.2
+	Median tags per position = 1 (ideal: 1)
+	Average tags per position = 1.006
+	Fragment Length Estimate: 133
+	Peak Width Estimate: 0
+		!!! No reliable estimate for peak size
+		Setting Peak width estimate to be equal to fragment length estimate
+	Autocorrelation quality control metrics:
+		Same strand fold enrichment: 1.0
+		Diff strand fold enrichment: 1.0
+		Same / Diff fold enrichment: 0.5
+
+		Guessing sample is ChIP-Seq - may have low enrichment with lots of background
+
+	Will parse file: nonEmpty/trimmed/star/p1_DM_input_boeckel_R1.head/Aligned.sortedByCoord.out.bam
+
+	Creating directory: nonEmpty/trimmed/star/tagDir/p1_DM_input_boeckel_R1.head and removing existing *.tags.tsv
+
+	Treating nonEmpty/trimmed/star/p1_DM_input_boeckel_R1.head/Aligned.sortedByCoord.out.bam as a bam file
+	Reading alignment file nonEmpty/trimmed/star/p1_DM_input_boeckel_R1.head/Aligned.sortedByCoord.out.bam
+
+	Optimizing tag files...
+	Estimated genome size = 2919644069
+	Estimated average read density = 0.000000 per bp
+	Total Tags = 906.0
+	Total Positions = 902
+	Average tag length = 67.5
+	Median tags per position = 1 (ideal: 1)
+	Average tags per position = 1.004
+	Fragment Length Estimate: 243
+	Peak Width Estimate: 0
+		!!! No reliable estimate for peak size
+		Setting Peak width estimate to be equal to fragment length estimate
+	Autocorrelation quality control metrics:
+		Same strand fold enrichment: 1.0
+		Diff strand fold enrichment: 31.4
+		Same / Diff fold enrichment: 0.6
+
+		Guessing sample is ChIP-Seq - uneven enrichment between same strand and
+		different strands - may have problems such as clonal amplification.
+
+
+
+call Peaks with Homer
+	Fragment Length = 133
+	Total Tags = 892.0
+	Tags per bp = 0.000000
+	Max tags per bp set automatically to 1.0
+	Finding peaks of size 133, no closer than 266
+		Finding peaks on 1 (minCount=-1.0), total tags positions = 60
+		Finding peaks on 10 (minCount=-1.0), total tags positions = 44
+		Finding peaks on 11 (minCount=-1.0), total tags positions = 38
+		Finding peaks on 12 (minCount=-1.0), total tags positions = 36
+		Finding peaks on 13 (minCount=-1.0), total tags positions = 34
+		Finding peaks on 14 (minCount=-1.0), total tags positions = 26
+		Finding peaks on 15 (minCount=-1.0), total tags positions = 28
+		Finding peaks on 16 (minCount=-1.0), total tags positions = 25
+		Finding peaks on 17 (minCount=-1.0), total tags positions = 29
+		Finding peaks on 18 (minCount=-1.0), total tags positions = 29
+		Finding peaks on 19 (minCount=-1.0), total tags positions = 19
+		Finding peaks on 2 (minCount=-1.0), total tags positions = 70
+		Finding peaks on 20 (minCount=-1.0), total tags positions = 16
+		Finding peaks on 21 (minCount=-1.0), total tags positions = 15
+		Finding peaks on 22 (minCount=-1.0), total tags positions = 12
+		Finding peaks on 3 (minCount=-1.0), total tags positions = 53
+		Finding peaks on 4 (minCount=-1.0), total tags positions = 57
+		Finding peaks on 5 (minCount=-1.0), total tags positions = 63
+		Finding peaks on 6 (minCount=-1.0), total tags positions = 57
+		Finding peaks on 7 (minCount=-1.0), total tags positions = 49
+		Finding peaks on 8 (minCount=-1.0), total tags positions = 55
+		Finding peaks on 9 (minCount=-1.0), total tags positions = 31
+		Finding peaks on GL000220.1 (minCount=-1.0), total tags positions = 1
+		Finding peaks on GL000224.1 (minCount=-1.0), total tags positions = 1
+		Finding peaks on GL000225.1 (minCount=-1.0), total tags positions = 1
+		Finding peaks on KI270729.1 (minCount=-1.0), total tags positions = 1
+		Finding peaks on KI270733.1 (minCount=-1.0), total tags positions = 1
+		Finding peaks on KI270744.1 (minCount=-1.0), total tags positions = 1
+		Finding peaks on MT (minCount=-1.0), total tags positions = 1
+		Finding peaks on X (minCount=-1.0), total tags positions = 33
+		Finding peaks on Y (minCount=-1.0), total tags positions = 1
+		Tags Used for cluster (less clonal tags) = 887.0 / 892.0
+	Expected tags per peak = 0.000059 (tbp = 0.000000)
+		Threshold	Peak Count	Expected Peak Count	FDR	Poisson
+		3	1.000	0.000	1.03e-06	3.42e-14
+		2	1.000	0.052	5.23e-02	1.74e-09
+		1	885.000	1773.948	1.00e+00	5.90e-05
+		0	885.000	30075187.970	1.00e+00	1.00e+00
+	0.10% FDR Threshold set at 3.0 (poisson pvalue ~ 3.42e-14)
+	1 peaks passed threshold
+	Differential Peaks: 0 of 1 (0.00% passed)
+	!! Something is wrong - no peaks were checked!
+	!! Something is wrong - no peaks were checked!
+	Total Peaks identified = 0
+	Centering peaks of size 133 using a fragment length of 133
