@@ -1,6 +1,13 @@
 # ChIP-Seq-Pipeline
-
 A pipeline for processing ChIP-Seq-Data
+
+The pipeline will run through the following steps:
+1. delete empty reads
+2. qualtity control with fastqc
+3. trim reads, if necessery, with FASTX_trimmer
+4. map reads with STAR
+5. create tag directories with Homer
+6. call peaks with Homer
 
 ## Requirements:
 
