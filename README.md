@@ -15,13 +15,13 @@ Homer (http://homer.ucsd.edu/homer/download.html)
 
 create target file targets.csv in same directory as Snakefile:
 
-Column 1: SampleID
-Column 2: Treatment
-Column 3: Replicate
-Column 4: fastqRead1
-Column 5: fastqRead2 ("-" if single end")
-Column 6: ControlID
-Column 7: fastqControl1
+Column 1: SampleID\n
+Column 2: Treatment\n
+Column 3: Replicate\n
+Column 4: fastqRead1\n
+Column 5: fastqRead2 ("-" if single end")\n
+Column 6: ControlID\n
+Column 7: fastqControl1\n
 Column 8: fastqControl2 ("-" if single end")
 
 	SampleID,Treatment,Replicate,fastqRead1,fastqRead2,ControlID,fastqControl1,fastqControl2
