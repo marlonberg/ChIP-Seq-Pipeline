@@ -58,7 +58,7 @@ rule fastqc:
 	shell: """echo "FastQC Analysis:\n" >> {log}
 		fastqc -o nonEmpty/FastQCfiles {input} --extract 2>> {log}"""
 
-#fucntion for calculating standart deviation
+#function for calculating standart deviation
 def stdev(line):
 	split = re.split('\s', line)
 	values = [float(split[1]), float(split[2]), float(split[3]), float(split[4])]
